@@ -26,7 +26,7 @@ The API will be available at `http://localhost:8000`
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/diabetes-triage-service.git
+   git clone https://github.com/theorjiugovictor/diabetes-triage-service.git
    cd diabetes-triage-service
    ```
 
