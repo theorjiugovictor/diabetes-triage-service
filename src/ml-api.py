@@ -9,19 +9,15 @@ from sklearn.metrics import mean_squared_error, r2_score
 import pandas as pd
 
 
-
-
-
-
-#---------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # ML Model
-#---------------------------------------------------------------------
+# ---------------------------------------------------------------------
 
 
 # Load dataset
 diabetes = load_diabetes()
 X = pd.DataFrame(diabetes.data, columns=diabetes.feature_names)
-y = pd.Series(diabetes.target, name='target')
+y = pd.Series(diabetes.target, name="target")
 
 
 # Show basic dataset info
@@ -33,7 +29,9 @@ print(y.head())
 
 
 # Split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
 
 
 # Apply StandardScaler
@@ -65,41 +63,40 @@ print(f"\nMean Squared Error on test set: {mse:.2f}")
 print(f"R² Score on test set: {r2:.4f}")
 
 
-
-
-
-
-#---------------------------------------------------------------------
+# ---------------------------------------------------------------------
 # API
-#---------------------------------------------------------------------
+# ---------------------------------------------------------------------
 
 # Create the FastAPI app
 app = FastAPI(title="Diabetes Regression Model API")
+
 
 # Define the input schema
 class DiabetesFeatures(BaseModel):
     features: List[float]
 
+
 @app.get("/")
 def root():
     return {"message": "Welcome to the Diabetes Regression API!"}
+
 
 @app.post("/predict")
 def predict(data: DiabetesFeatures):
     # Validate input size
     if len(data.features) != X.shape[1]:
-        raise HTTPException(status_code=400, detail=f"Expected {X.shape[1]} features, got {len(data.features)}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Expected {X.shape[1]} features, got {len(data.features)}",
+        )
 
     # Scale input features using the same scaler
     input_scaled = scaler.transform([data.features])
-    
+
     # Predict
     prediction = model.predict(input_scaled)[0]
 
-    return {
-        "prediction": prediction
-    }
-
+    return {"prediction": prediction}
 
 
 ## run with "fastapi run ml-api.py "

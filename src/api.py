@@ -1,6 +1,7 @@
 """
 FastAPI service for diabetes progression prediction.
 """
+
 from pathlib import Path
 from typing import Dict
 
@@ -28,12 +29,13 @@ if VERSION_PATH.exists():
 app = FastAPI(
     title="Diabetes Triage Service",
     description="ML service for predicting diabetes progression risk",
-    version=model_version
+    version=model_version,
 )
 
 
 class PatientFeatures(BaseModel):
     """Input schema for patient features."""
+
     age: float = Field(..., description="Age (normalized)")
     sex: float = Field(..., description="Sex (normalized)")
     bmi: float = Field(..., description="Body mass index (normalized)")
@@ -57,19 +59,21 @@ class PatientFeatures(BaseModel):
                 "s3": -0.02,
                 "s4": 0.02,
                 "s5": 0.02,
-                "s6": -0.001
+                "s6": -0.001,
             }
         }
 
 
 class PredictionResponse(BaseModel):
     """Response schema for predictions."""
+
     prediction: float = Field(..., description="Predicted progression score")
     model_version: str = Field(..., description="Model version used")
 
 
 class HealthResponse(BaseModel):
     """Response schema for health check."""
+
     status: str
     model_version: str
 
@@ -77,37 +81,28 @@ class HealthResponse(BaseModel):
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
-    return {
-        "status": "ok",
-        "model_version": model_version
-    }
+    return {"status": "ok", "model_version": model_version}
 
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(features: PatientFeatures):
     """
     Predict diabetes progression risk score.
-    
+
     Higher scores indicate greater risk of disease progression.
     """
     try:
         # Convert to DataFrame with correct feature names
         feature_dict = features.dict()
         df = pd.DataFrame([feature_dict])
-        
+
         # Make prediction
         prediction = model.predict(df)[0]
-        
-        return {
-            "prediction": float(prediction),
-            "model_version": model_version
-        }
-    
+
+        return {"prediction": float(prediction), "model_version": model_version}
+
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Prediction failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 
 @app.get("/")
@@ -119,6 +114,6 @@ async def root():
         "endpoints": {
             "health": "/health",
             "predict": "/predict (POST)",
-            "docs": "/docs"
-        }
+            "docs": "/docs",
+        },
     }
