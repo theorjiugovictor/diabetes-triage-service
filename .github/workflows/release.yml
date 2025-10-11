@@ -1,0 +1,143 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Train model
+      run: |
+        python src/train.py
+    
+    - name: Run tests
+      run: |
+        pytest tests/ -v
+    
+    - name: Extract version from tag
+      id: get_version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=sha
+    
+    - name: Build Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: false
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        load: true
+    
+    - name: Get primary tag for testing
+      id: primary_tag
+      run: |
+        PRIMARY_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+        echo "tag=$PRIMARY_TAG" >> $GITHUB_OUTPUT
+    
+    - name: Run container smoke tests
+      run: |
+        # Start container
+        docker run -d -p 8000:8000 --name test-container ${{ steps.primary_tag.outputs.tag }}
+        
+        # Wait for container to be ready
+        echo "Waiting for container to start..."
+        sleep 10
+        
+        # Test health endpoint
+        echo "Testing /health endpoint..."
+        curl -f http://localhost:8000/health || exit 1
+        
+        # Test predict endpoint
+        echo "Testing /predict endpoint..."
+        curl -f -X POST http://localhost:8000/predict \
+          -H "Content-Type: application/json" \
+          -d '{"age":0.02,"sex":-0.044,"bmi":0.06,"bp":-0.03,"s1":-0.02,"s2":0.03,"s3":-0.02,"s4":0.02,"s5":0.02,"s6":-0.001}' \
+          || exit 1
+        
+        # Stop container
+        docker stop test-container
+        docker rm test-container
+        
+        echo "Smoke tests passed!"
+    
+    - name: Push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+    
+    - name: Create Release Notes
+      id: release_notes
+      run: |
+        cat > release_notes.md << 'EOF'
+        ## Diabetes Triage Service ${{ github.ref_name }}
+        
+        ### Model Metrics
+        EOF
+        cat models/metrics.json >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Docker Image" >> release_notes.md
+        echo "\`\`\`bash" >> release_notes.md
+        echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }}" >> release_notes.md
+        echo "\`\`\`" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Usage" >> release_notes.md
+        echo "\`\`\`bash" >> release_notes.md
+        echo "docker run -p 8000:8000 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.get_version.outputs.VERSION }}" >> release_notes.md
+        echo "\`\`\`" >> release_notes.md
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          models/metrics.json
+          models/model.pkl
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
