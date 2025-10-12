@@ -36,18 +36,20 @@ def load_data():
 def train_model(X_train, y_train):
     """
     Train improved model: PolynomialFeatures + StandardScaler + Ridge.
-    
+
     Improvements over v0.1:
     - Polynomial features (degree=2) to capture non-linear interactions
     - Ridge regression with L2 regularization to prevent overfitting
     - Alpha tuned via cross-validation
     """
-    pipeline = Pipeline([
-        ("poly", PolynomialFeatures(degree=2, include_bias=False)),
-        ("scaler", StandardScaler()),
-        ("regressor", Ridge(alpha=1.0, random_state=RANDOM_SEED))
-    ])
-    
+    pipeline = Pipeline(
+        [
+            ("poly", PolynomialFeatures(degree=2, include_bias=False)),
+            ("scaler", StandardScaler()),
+            ("regressor", Ridge(alpha=1.0, random_state=RANDOM_SEED)),
+        ]
+    )
+
     pipeline.fit(X_train, y_train)
     return pipeline
 
@@ -55,33 +57,34 @@ def train_model(X_train, y_train):
 def evaluate_model(model, X_train, X_test, y_train, y_test):
     """
     Evaluate model and return comprehensive metrics.
-    
+
     Includes both regression metrics and classification metrics
     for high-risk patient identification.
     """
     # Regression predictions
     y_pred_train = model.predict(X_train)
     y_pred_test = model.predict(X_test)
-    
+
     # Regression metrics
     rmse_train = np.sqrt(mean_squared_error(y_train, y_pred_train))
     rmse_test = np.sqrt(mean_squared_error(y_test, y_pred_test))
     r2_train = r2_score(y_train, y_pred_train)
     r2_test = r2_score(y_test, y_pred_test)
     mae_test = np.mean(np.abs(y_test - y_pred_test))
-    
+
     # Cross-validation score
-    cv_scores = cross_val_score(model, X_train, y_train, cv=5, 
-                                 scoring='neg_root_mean_squared_error')
+    cv_scores = cross_val_score(
+        model, X_train, y_train, cv=5, scoring="neg_root_mean_squared_error"
+    )
     cv_rmse = -cv_scores.mean()
-    
+
     # Classification metrics for high-risk detection
     y_test_binary = (y_test >= RISK_THRESHOLD).astype(int)
     y_pred_binary = (y_pred_test >= RISK_THRESHOLD).astype(int)
-    
+
     precision = precision_score(y_test_binary, y_pred_binary, zero_division=0)
     recall = recall_score(y_test_binary, y_pred_binary, zero_division=0)
-    
+
     metrics = {
         "version": MODEL_VERSION,
         "rmse_train": float(rmse_train),
@@ -98,32 +101,32 @@ def evaluate_model(model, X_train, X_test, y_train, y_test):
         "alpha": 1.0,
         "random_seed": RANDOM_SEED,
         "n_train_samples": len(y_train),
-        "n_test_samples": len(y_test)
+        "n_test_samples": len(y_test),
     }
-    
+
     return metrics
 
 
 def save_artifacts(model, metrics, output_dir="models"):
     """Save model, metrics, and threshold."""
     Path(output_dir).mkdir(parents=True, exist_ok=True)
-    
+
     # Save model
     model_path = Path(output_dir) / "model.pkl"
     joblib.dump(model, model_path)
     print(f"Model saved to {model_path}")
-    
+
     # Save metrics
     metrics_path = Path(output_dir) / "metrics.json"
     with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=2)
     print(f"Metrics saved to {metrics_path}")
-    
+
     # Save version
     version_path = Path(output_dir) / "version.txt"
     with open(version_path, "w") as f:
         f.write(MODEL_VERSION)
-    
+
     # Save risk threshold
     threshold_path = Path(output_dir) / "risk_threshold.txt"
     with open(threshold_path, "w") as f:
@@ -134,28 +137,28 @@ def main():
     """Main training pipeline."""
     print(f"Training model version {MODEL_VERSION}")
     print("=" * 70)
-    
+
     # Load data
     print("Loading data...")
     X, y = load_data()
     print(f"Dataset shape: {X.shape}")
-    
+
     # Split data
     print("Splitting data (80/20 train/test)...")
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=RANDOM_SEED
     )
-    
+
     # Train model
     print("Training improved model...")
     print("  - Adding polynomial features (degree=2)")
     print("  - Using Ridge regression (alpha=1.0)")
     model = train_model(X_train, y_train)
-    
+
     # Evaluate
     print("\nEvaluating model...")
     metrics = evaluate_model(model, X_train, X_test, y_train, y_test)
-    
+
     print("\n" + "=" * 70)
     print("Model Performance (v0.2):")
     print("=" * 70)
@@ -169,11 +172,11 @@ def main():
     print(f"  Precision:          {metrics['high_risk_precision']:.4f}")
     print(f"  Recall:             {metrics['high_risk_recall']:.4f}")
     print("=" * 70)
-    
+
     # Save
     print("\nSaving artifacts...")
     save_artifacts(model, metrics)
-    
+
     print("\nTraining complete!")
     return metrics
 
