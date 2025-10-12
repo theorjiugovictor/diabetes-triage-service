@@ -14,10 +14,10 @@ Pull and run the latest release:
 
 ```bash
 # Pull the image
-docker pull ghcr.io/theorjiugovictor/diabetes-triage-service:v0.1.0
+docker pull ghcr.io/theorjiugovictor/diabetes-triage-service:latest
 
 # Run the service
-docker run -p 8000:8000 ghcr.io/theorjiugovictor/diabetes-triage-service:v0.1.0
+docker run -p 8000:8000 ghcr.io/theorjiugovictor/diabetes-triage-service:latest
 ```
 
 The API will be available at `http://localhost:8000`
