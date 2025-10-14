@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 # Load model at startup
 MODEL_PATH = Path("models/model.pkl")
 VERSION_PATH = Path("models/version.txt")
+RISK_THRESHOLD_PATH = Path("models/risk_threshold.txt")
+DEFAULT_RISK_THRESHOLD = 140.0  # Upper quartile heuristic
 
 if not MODEL_PATH.exists():
     raise RuntimeError(f"Model file not found at {MODEL_PATH}")
@@ -24,6 +26,15 @@ model_version = "unknown"
 if VERSION_PATH.exists():
     with open(VERSION_PATH, "r") as f:
         model_version = f.read().strip()
+
+# Load risk threshold (optional artifact)
+risk_threshold = DEFAULT_RISK_THRESHOLD
+if RISK_THRESHOLD_PATH.exists():
+    try:
+        risk_threshold = float(RISK_THRESHOLD_PATH.read_text().strip())
+    except ValueError:
+        # Keep default if parsing fails
+        pass
 
 # Create FastAPI app
 app = FastAPI(
@@ -65,10 +76,20 @@ class PatientFeatures(BaseModel):
 
 
 class PredictionResponse(BaseModel):
-    """Response schema for predictions."""
+    """Response schema for predictions including triage guidance."""
 
-    prediction: float = Field(..., description="Predicted progression score")
+    prediction: float = Field(
+        ..., description="Predicted progression score (higher = worse progression)"
+    )
     model_version: str = Field(..., description="Model version used")
+    high_risk: bool = Field(..., description="True if prediction >= risk threshold")
+    risk_threshold: float = Field(
+        ..., description="Threshold separating high vs lower risk"
+    )
+    risk_level: str = Field(..., description="Risk category label")
+    nurse_call_to_action: str = Field(
+        ..., description="Recommended next action for triage"
+    )
 
 
 class HealthResponse(BaseModel):
@@ -86,23 +107,27 @@ async def health_check():
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(features: PatientFeatures):
-    """
-    Predict diabetes progression risk score.
-
-    Higher scores indicate greater risk of disease progression.
-    """
+    """Predict diabetes progression score and provide triage guidance."""
     try:
-        # Convert to DataFrame with correct feature names
-        feature_dict = features.dict()
-        df = pd.DataFrame([feature_dict])
-
-        # Make prediction
-        prediction = model.predict(df)[0]
-
-        return {"prediction": float(prediction), "model_version": model_version}
-
+        df = pd.DataFrame([features.model_dump()])
+        prediction = float(model.predict(df)[0])
+        high = prediction >= risk_threshold
+        risk_level = "HIGH" if high else "LOW"
+        cta = (
+            "Flag patient for priority follow-up within 24h; review labs and escalate if needed."
+            if high
+            else "Routine follow-up; monitor and re-evaluate at next scheduled check."
+        )
+        return {
+            "prediction": prediction,
+            "model_version": model_version,
+            "high_risk": high,
+            "risk_threshold": risk_threshold,
+            "risk_level": risk_level,
+            "nurse_call_to_action": cta,
+        }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
 
 
 @app.get("/")
@@ -111,6 +136,7 @@ async def root():
     return {
         "service": "Diabetes Triage Service",
         "version": model_version,
+        "risk_threshold": risk_threshold,
         "endpoints": {
             "health": "/health",
             "predict": "/predict (POST)",
