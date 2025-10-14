@@ -2,6 +2,25 @@
 
 All notable changes to the Diabetes Triage Service will be documented in this file.
 
+## [0.2.1] - 2025-10-14
+
+### Added
+- API prediction response fields: `high_risk`, `risk_threshold`, `risk_level`, `nurse_call_to_action` (additive, backward compatible)
+- `/health` now includes `risk_threshold`
+- Root (`/`) response now exposes `risk_threshold`
+- Support for configurable risk threshold via `models/risk_threshold.txt` (fallback 140.0)
+- Enhanced README documentation: triage logic, threshold explanation, standardized input clarification
+
+### Changed
+- Expanded response contract for `/predict` to surface triage guidance without altering existing keys (`prediction`, `model_version` still present)
+- Clarified that model output is a regression score; high-risk classification is derived via thresholding
+
+### Notes
+- No new trained model artifact; underlying model version remains `0.2.0` (API-only enhancement). If you desire model/API version parity, retrain and bump `MODEL_VERSION` then cut `0.3.0`.
+- Clients parsing only previous fields remain unaffected.
+
+---
+
 ## [0.2.0] - 2025-10-12
 
 ### Added
